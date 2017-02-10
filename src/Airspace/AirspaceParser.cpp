@@ -137,6 +137,7 @@ struct TempAirspaceType
   // Circle or Arc
   GeoPoint center;
   fixed radius;
+  fixed width;
 
   // Arc
   int rotation;
@@ -153,6 +154,7 @@ struct TempAirspaceType
     center.latitude = Angle::Zero();
     rotation = 1;
     radius = fixed(0);
+    width = fixed(0);
   }
 
   void
@@ -164,11 +166,58 @@ struct TempAirspaceType
     center.latitude = Angle::Zero();
     rotation = 1;
     radius = fixed(0);
+    width = fixed(0);
   }
 
+  void 
+  InflateAirway()
+  {
+    if (points.size() < 2) {
+      return;
+    }
+    
+    std::vector<GeoPoint> leftPoints;
+    std::vector<GeoPoint> rightPoints;
+    
+    for (unsigned int i = 0; i < (points.size() - 1); i++) {
+      GeoPoint airwayStart = points.at(i);
+      GeoPoint airwayEnd = points.at(i+1);
+      if (airwayStart == airwayEnd) {
+        continue;
+      }
+      Angle bearing = Bearing(airwayStart, airwayEnd);
+      GeoPoint left1 = FindLatitudeLongitude(airwayStart, 
+                                        bearing - Angle::Degrees(90), width/2);
+      GeoPoint left2 = FindLatitudeLongitude(airwayEnd, 
+                                        bearing - Angle::Degrees(90), width/2);
+      leftPoints.push_back(left1);
+      leftPoints.push_back(left2);
+      
+      GeoPoint right1 = FindLatitudeLongitude(airwayStart, 
+                                        bearing + Angle::Degrees(90), width/2);
+      GeoPoint right2 = FindLatitudeLongitude(airwayEnd, 
+                                        bearing + Angle::Degrees(90), width/2);
+      rightPoints.push_back(right1);
+      rightPoints.push_back(right2);
+    }
+
+    points.clear();
+    for (unsigned int i = 0; i < leftPoints.size(); i++) {
+      points.push_back(leftPoints.at(i));
+    }
+    
+    for (int i = rightPoints.size() - 1; i >= 0; i--) {
+      points.push_back(rightPoints.at(i));
+    }
+  }
+  
   void
   AddPolygon(Airspaces &airspace_database)
   {
+    if (width > fixed(0)) {
+      // This is an airway, calculate points based on vector and width
+      InflateAirway();
+    }
     if (points.size() < 3)
       return;
 
@@ -813,6 +862,16 @@ ParseLineTNP(Airspaces &airspace_database, TCHAR *line,
       return false;
 
     temp_area.points.push_back(temp_point);
+  } else if ((parameter = StringAfterPrefixCI(line, _T("AWY="))) != nullptr) {
+    GeoPoint temp_point;
+    if (!ParseCoordsTNP(parameter, temp_point))
+      return false;
+
+    if (temp_area.width == fixed(0)) {
+      // No width specified, use default of 10 Nautical Miles
+      temp_area.width =  Units::ToSysUnit(fixed(10), Unit::NAUTICAL_MILES);
+    }
+    temp_area.points.push_back(temp_point);
   } else if ((parameter =
       StringAfterPrefixCI(line, _T("CIRCLE "))) != nullptr) {
     if (!ParseCircleTNP(parameter, temp_area))
@@ -820,6 +879,9 @@ ParseLineTNP(Airspaces &airspace_database, TCHAR *line,
 
     temp_area.AddCircle(airspace_database);
     temp_area.ResetTNP();
+  } else if ((parameter = StringAfterPrefixCI(line, _T("WIDTH="))) != nullptr) {
+    temp_area.width = Units::ToSysUnit(fixed(ParseDouble(parameter)),
+                                      Unit::NAUTICAL_MILES);
   } else if ((parameter =
       StringAfterPrefixCI(line, _T("CLOCKWISE "))) != nullptr) {
     temp_area.rotation = 1;
@@ -845,6 +907,13 @@ ParseLineTNP(Airspaces &airspace_database, TCHAR *line,
   } else if ((parameter = StringAfterPrefixCI(line, _T("TOPS="))) != nullptr) {
     ReadAltitude(parameter, temp_area.top);
   } else if ((parameter = StringAfterPrefixCI(line, _T("BASE="))) != nullptr) {
+    if (temp_area.points.size() > 0) {
+      // Multi-stage airway, need to remember the name
+      tstring name = temp_area.name;
+      temp_area.AddPolygon(airspace_database);
+      temp_area.ResetTNP();
+      temp_area.name = name;
+    }
     ReadAltitude(parameter, temp_area.base);
   } else if ((parameter = StringAfterPrefixCI(line, _T("RADIO="))) != nullptr) {
     temp_area.radio = parameter;
