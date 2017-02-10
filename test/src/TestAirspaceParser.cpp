@@ -192,7 +192,7 @@ TestTNP()
     { _T("Class-MATZ-Test"), MATZ },
   };
 
-  ok1(airspaces.GetSize() == 24);
+  ok1(airspaces.GetSize() == 28);
 
   const auto range = airspaces.QueryAll();
   for (auto it = range.begin(); it != range.end(); ++it) {
@@ -230,6 +230,93 @@ TestTNP()
       ok1(equals(points[4].GetLocation(),
                  Angle::DMS(1, 30, 30),
                  Angle::DMS(1, 30, 30, true)));
+    } else if (StringIsEqual(_T("Airway-Test"), airspace.GetName())) {
+      if (!ok1(airspace.GetShape() == AbstractAirspace::Shape::POLYGON))
+        continue;
+      
+      const AirspacePolygon &polygon = (const AirspacePolygon &)airspace;
+      const SearchPointVector &points = polygon.GetPoints();
+
+      if (!ok1(points.size() == 9)) {
+        continue;
+      }
+      // Check Airway's width
+      ok1(equals(points[0].DistanceTo(points[7].GetLocation()), 
+                  Units::ToSysUnit(1.08, Unit::NAUTICAL_MILES)));
+      ok1(equals(points[1].DistanceTo(points[6].GetLocation()), 
+                  Units::ToSysUnit(1.08, Unit::NAUTICAL_MILES)));
+      ok1(equals(points[2].DistanceTo(points[5].GetLocation()), 
+                  Units::ToSysUnit(1.08, Unit::NAUTICAL_MILES)));
+      ok1(equals(points[3].DistanceTo(points[4].GetLocation()), 
+                  Units::ToSysUnit(1.08, Unit::NAUTICAL_MILES)));
+      
+      // Check Airway's bearing
+      GeoPoint start(Angle::DMS(1, 30, 30, true), Angle::DMS(1, 30, 30));
+      GeoPoint mid(Angle::DMS(1, 30, 30), Angle::DMS(1, 30, 30, true));
+      GeoPoint end(Angle::DMS(1, 30, 30), Angle::DMS(1, 30, 30));
+      ok1(equals(start.Bearing(mid).Degrees(), 
+          points[0].GetLocation().Bearing(points[1].GetLocation()).Degrees()));
+      ok1(equals(start.Bearing(mid).Degrees(), 
+          points[7].GetLocation().Bearing(points[6].GetLocation()).Degrees()));
+      ok1(equals(mid.Bearing(end).Degrees(), 
+          points[2].GetLocation().Bearing(points[3].GetLocation()).Degrees()));
+      ok1(equals(mid.Bearing(end).Degrees(), 
+          points[5].GetLocation().Bearing(points[4].GetLocation()).Degrees()));
+      
+      // Check Airway corridor straddles defined midpoints
+      GeoPoint middle = points[0].GetLocation().Middle(points[7].GetLocation());
+      ok1((start.longitude.Degrees() - middle.longitude.Degrees() < 1e-7f) &&
+          (start.latitude.Degrees() - middle.latitude.Degrees() < 1e-7f));
+      middle = points[1].GetLocation().Middle(points[6].GetLocation());
+      ok1((mid.longitude.Degrees() - middle.longitude.Degrees() < 1e-7f) &&
+          (mid.latitude.Degrees() - middle.latitude.Degrees() < 1e-7f));
+      middle = points[2].GetLocation().Middle(points[5].GetLocation());
+      ok1((mid.longitude.Degrees() - middle.longitude.Degrees() < 1e-7f) &&
+          (mid.latitude.Degrees() - middle.latitude.Degrees() < 1e-7f));
+      middle = points[3].GetLocation().Middle(points[4].GetLocation());
+      ok1((end.longitude.Degrees() - middle.longitude.Degrees() < 1e-7f) &&
+          (end.latitude.Degrees() - middle.latitude.Degrees() < 1e-7f));
+    } else if (StringIsEqual(_T("Airway-Default-Width-Test"), airspace.GetName())) {
+      if (!ok1(airspace.GetShape() == AbstractAirspace::Shape::POLYGON))
+        continue;
+      
+      const AirspacePolygon &polygon = (const AirspacePolygon &)airspace;
+      const SearchPointVector &points = polygon.GetPoints();
+
+      if (!ok1(points.size() == 5)) {
+        continue;
+      }
+      // Check Airway's width
+      ok1(equals(points[0].DistanceTo(points[3].GetLocation()), 
+                  Units::ToSysUnit(10, Unit::NAUTICAL_MILES)));
+      ok1(equals(points[1].DistanceTo(points[2].GetLocation()), 
+                  Units::ToSysUnit(10, Unit::NAUTICAL_MILES)));
+      
+    } else if (StringIsEqual(_T("Airway-Stepped-Test"), airspace.GetName())) {
+      // This will make 2 airspaces with the same name, different heights
+      if (!ok1(airspace.GetShape() == AbstractAirspace::Shape::POLYGON))
+        continue;
+      
+      const AirspacePolygon &polygon = (const AirspacePolygon &)airspace;
+      const SearchPointVector &points = polygon.GetPoints();
+      if (!ok1(points.size() == 5)) {
+        continue;
+      }
+      
+      ok1(points[0].DistanceTo(points[3].GetLocation()) - 
+              Units::ToSysUnit(1.08, Unit::NAUTICAL_MILES) < 1e-7f);
+
+      ok1(airspace.GetBase().reference == AltitudeReference::MSL);
+      ok1(airspace.GetTop().reference == AltitudeReference::STD);
+      if (airspace.GetBase().altitude == 
+            Units::ToSysUnit(1000, Unit::FEET)) {
+        // First airway segment
+        ok1(equals(airspace.GetTop().flight_level, 35));
+      } else if (airspace.GetBase().altitude == 
+                  Units::ToSysUnit(2000, Unit::FEET)) {
+        // Second airway segment
+        ok1(equals(airspace.GetTop().flight_level, 40));
+      }
     } else if (StringIsEqual(_T("Radio-Test"), airspace.GetName())) {
       ok1(StringIsEqual(_T("130.125 MHz"), airspace.GetRadioText().c_str()));
     } else if (StringIsEqual(_T("Height-Test-1"), airspace.GetName())) {
@@ -275,7 +362,7 @@ TestTNP()
 
 int main(int argc, char **argv)
 try {
-  plan_tests(102);
+  plan_tests(132);
 
   TestOpenAir();
   TestTNP();

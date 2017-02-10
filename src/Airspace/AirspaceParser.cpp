@@ -135,6 +135,7 @@ struct TempAirspaceType
   // Circle or Arc
   GeoPoint center;
   double radius;
+  double width;
 
   // Arc
   int rotation;
@@ -151,6 +152,7 @@ struct TempAirspaceType
     center.latitude = Angle::Zero();
     rotation = 1;
     radius = 0;
+    width = 0;
   }
 
   void
@@ -162,11 +164,58 @@ struct TempAirspaceType
     center.latitude = Angle::Zero();
     rotation = 1;
     radius = 0;
+    width = 0;
   }
 
+  void 
+  InflateAirway()
+  {
+    if (points.size() < 2) {
+      return;
+    }
+    
+    std::vector<GeoPoint> leftPoints;
+    std::vector<GeoPoint> rightPoints;
+    
+    for (unsigned int i = 0; i < (points.size() - 1); i++) {
+      GeoPoint airwayStart = points.at(i);
+      GeoPoint airwayEnd = points.at(i+1);
+      if (airwayStart == airwayEnd) {
+        continue;
+      }
+      Angle bearing = Bearing(airwayStart, airwayEnd);
+      GeoPoint left1 = FindLatitudeLongitude(airwayStart, 
+                                        bearing - Angle::Degrees(90), width/2);
+      GeoPoint left2 = FindLatitudeLongitude(airwayEnd, 
+                                        bearing - Angle::Degrees(90), width/2);
+      leftPoints.push_back(left1);
+      leftPoints.push_back(left2);
+      
+      GeoPoint right1 = FindLatitudeLongitude(airwayStart, 
+                                        bearing + Angle::Degrees(90), width/2);
+      GeoPoint right2 = FindLatitudeLongitude(airwayEnd, 
+                                        bearing + Angle::Degrees(90), width/2);
+      rightPoints.push_back(right1);
+      rightPoints.push_back(right2);
+    }
+
+    points.clear();
+    for (unsigned int i = 0; i < leftPoints.size(); i++) {
+      points.push_back(leftPoints.at(i));
+    }
+    
+    for (int i = rightPoints.size() - 1; i >= 0; i--) {
+      points.push_back(rightPoints.at(i));
+    }
+  }
+  
   void
   AddPolygon(Airspaces &airspace_database)
   {
+    if (width > 1e-7) { // TODO: find constant for this
+      // This is an airway, calculate points based on vector and width
+      InflateAirway();
+    }
     if (points.size() < 3)
       return;
 
@@ -781,12 +830,29 @@ ParseLineTNP(Airspaces &airspace_database, StringParser<TCHAR> &input,
       return false;
 
     temp_area.points.push_back(temp_point);
+  } else if (input.SkipMatchIgnoreCase(_T("AWY="), 4)) {
+    GeoPoint temp_point;
+    if (!ParseCoordsTNP(input, temp_point))
+      return false;
+
+    if (temp_area.width < 1e-7f) { // TODO: find constant for this
+      // No width specified, use default of 10 Nautical Miles
+      temp_area.width =  Units::ToSysUnit(10, Unit::NAUTICAL_MILES);
+    }
+    temp_area.points.push_back(temp_point);
   } else if (input.SkipMatchIgnoreCase(_T("CIRCLE "), 7)) {
     if (!ParseCircleTNP(input, temp_area))
       return false;
 
     temp_area.AddCircle(airspace_database);
     temp_area.ResetTNP();
+  } else if (input.SkipMatchIgnoreCase(_T("WIDTH="), 6)) {
+  double width;
+  if (!input.ReadDouble(width) || width <= 0 || width > 1000) {
+    return false;
+  }
+
+  temp_area.width = Units::ToSysUnit(width, Unit::NAUTICAL_MILES);
   } else if (input.SkipMatchIgnoreCase(_T("CLOCKWISE "), 10)) {
     temp_area.rotation = 1;
     if (!ParseArcTNP(input, temp_area))
@@ -803,13 +869,20 @@ ParseLineTNP(Airspaces &airspace_database, StringParser<TCHAR> &input,
   } else if (input.SkipMatchIgnoreCase(_T("TYPE="), 5)) {
     temp_area.AddPolygon(airspace_database);
     temp_area.ResetTNP();
-
+    
     temp_area.type = ParseTypeTNP(input.c_str());
   } else if (input.SkipMatchIgnoreCase(_T("CLASS="), 6)) {
     temp_area.type = ParseClassTNP(input.c_str());
   } else if (input.SkipMatchIgnoreCase(_T("TOPS="), 5)) {
     ReadAltitude(input, temp_area.top);
   } else if (input.SkipMatchIgnoreCase(_T("BASE="), 5)) {
+    if (temp_area.points.size() > 0) {
+      // Multi-stage airway, need to remember the name
+      tstring name = temp_area.name;
+      temp_area.AddPolygon(airspace_database);
+      temp_area.ResetTNP();
+      temp_area.name = name;
+    }
     ReadAltitude(input, temp_area.base);
   } else if (input.SkipMatchIgnoreCase(_T("RADIO="), 6)) {
     temp_area.radio = input.c_str();
