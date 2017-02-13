@@ -212,7 +212,7 @@ struct TempAirspaceType
   void
   AddPolygon(Airspaces &airspace_database)
   {
-    if (width > 1e-7) { // TODO: find constant for this
+    if (width > 1e-7) {
       // This is an airway, calculate points based on vector and width
       InflateAirway();
     }
@@ -835,7 +835,7 @@ ParseLineTNP(Airspaces &airspace_database, StringParser<TCHAR> &input,
     if (!ParseCoordsTNP(input, temp_point))
       return false;
 
-    if (temp_area.width < 1e-7f) { // TODO: find constant for this
+    if (temp_area.width < 1e-7f) {
       // No width specified, use default of 10 Nautical Miles
       temp_area.width =  Units::ToSysUnit(10, Unit::NAUTICAL_MILES);
     }

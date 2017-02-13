@@ -265,17 +265,17 @@ TestTNP()
       
       // Check Airway corridor straddles defined midpoints
       GeoPoint middle = points[0].GetLocation().Middle(points[7].GetLocation());
-      ok1((start.longitude.Degrees() - middle.longitude.Degrees() < 1e-7f) &&
-          (start.latitude.Degrees() - middle.latitude.Degrees() < 1e-7f));
+      ok1((fabs(start.longitude.Degrees() - middle.longitude.Degrees()) < 1e-7f) &&
+          (fabs(start.latitude.Degrees() - middle.latitude.Degrees()) < 1e-7f));
       middle = points[1].GetLocation().Middle(points[6].GetLocation());
-      ok1((mid.longitude.Degrees() - middle.longitude.Degrees() < 1e-7f) &&
-          (mid.latitude.Degrees() - middle.latitude.Degrees() < 1e-7f));
+      ok1((fabs(mid.longitude.Degrees() - middle.longitude.Degrees()) < 1e-7f) &&
+          (fabs(mid.latitude.Degrees() - middle.latitude.Degrees()) < 1e-7f));
       middle = points[2].GetLocation().Middle(points[5].GetLocation());
-      ok1((mid.longitude.Degrees() - middle.longitude.Degrees() < 1e-7f) &&
-          (mid.latitude.Degrees() - middle.latitude.Degrees() < 1e-7f));
+      ok1((fabs(mid.longitude.Degrees() - middle.longitude.Degrees()) < 1e-7f) &&
+          (fabs(mid.latitude.Degrees() - middle.latitude.Degrees()) < 1e-7f));
       middle = points[3].GetLocation().Middle(points[4].GetLocation());
-      ok1((end.longitude.Degrees() - middle.longitude.Degrees() < 1e-7f) &&
-          (end.latitude.Degrees() - middle.latitude.Degrees() < 1e-7f));
+      ok1((fabs(end.longitude.Degrees() - middle.longitude.Degrees()) < 1e-7f) &&
+          (fabs(end.latitude.Degrees() - middle.latitude.Degrees()) < 1e-7f));
     } else if (StringIsEqual(_T("Airway-Default-Width-Test"), airspace.GetName())) {
       if (!ok1(airspace.GetShape() == AbstractAirspace::Shape::POLYGON))
         continue;
@@ -302,9 +302,6 @@ TestTNP()
       if (!ok1(points.size() == 5)) {
         continue;
       }
-      
-      ok1(points[0].DistanceTo(points[3].GetLocation()) - 
-              Units::ToSysUnit(1.08, Unit::NAUTICAL_MILES) < 1e-7f);
 
       ok1(airspace.GetBase().reference == AltitudeReference::MSL);
       ok1(airspace.GetTop().reference == AltitudeReference::STD);
@@ -362,7 +359,7 @@ TestTNP()
 
 int main(int argc, char **argv)
 try {
-  plan_tests(132);
+  plan_tests(130);
 
   TestOpenAir();
   TestTNP();
